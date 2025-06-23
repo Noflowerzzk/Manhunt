@@ -23,6 +23,7 @@ import net.minecraft.text.ClickEvent;
 import net.minecraft.text.HoverEvent;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.world.GameMode;
 import net.minecraft.world.GameRules;
 import org.apache.logging.log4j.core.jmx.Server;
 import org.slf4j.Logger;
@@ -106,6 +107,7 @@ public class ManHunt implements ModInitializer {
 			ServerPlayerEntity player = handler.getPlayer();
 			sendRoleSelectionButtons(player);
 			LOGGER.info("Send messages to " + player.getName().getString());
+			player.changeGameMode(GameMode.SPECTATOR);
 		});
 	}
 
