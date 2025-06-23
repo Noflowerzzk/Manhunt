@@ -1,0 +1,44 @@
+{
+	"schemaVersion": 1,
+	"id": "man-hunt",
+	"version": "${version}",
+	"name": "Man Hunt",
+	"description": "This is an example description! Tell everyone what your mod is about!",
+	"authors": [
+		"Noflowerzzk"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/man-hunt/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.manhunt.ManHunt"
+		],
+		"client": [
+			"com.manhunt.ManHuntClient"
+		],
+		"fabric-datagen": [
+			"com.manhunt.ManHuntDataGenerator"
+		]
+	},
+	"mixins": [
+		"man-hunt.mixins.json",
+		{
+			"config": "man-hunt.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.16.10",
+		"minecraft": "~1.21.4",
+		"java": ">=21",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"another-mod": "*"
+	}
+}
