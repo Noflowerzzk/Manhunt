@@ -3,6 +3,8 @@ package com.manhunt.runtime;
 import com.manhunt.pregame.TeamHandler;
 import com.manhunt.utils.CompassHandler;
 import net.minecraft.block.Blocks;
+import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.packet.s2c.play.PositionFlag;
 import net.minecraft.server.MinecraftServer;
@@ -27,6 +29,7 @@ public class RunTimeControl {
 
 	private static Map<PlayerEntity, Boolean> isRunnerLiving = new HashMap<>();
 
+	public static int prepareTime = 0;
 
 	public static void init() {
 		running = false;
@@ -43,7 +46,32 @@ public class RunTimeControl {
 	public static void start(ServerPlayerEntity player) {
 		if (running) {
 			player.sendMessage(Text.literal("§c游戏正在进行中！"));
+			return;
 		}
+
+		boolean exist_runner = false, exist_hunter = false;
+		for (ServerWorld serverWorld : player.getServer().getWorlds()) {
+			for (ServerPlayerEntity other : serverWorld.getPlayers()) {
+				if (other.getScoreboardTeam() != null) {
+					if (other.getScoreboardTeam().getName() == "runner") {
+						exist_runner = true;
+					}
+					if (other.getScoreboardTeam().getName() == "hunter") {
+						exist_hunter = true;
+					}
+				}
+			}
+		}
+
+		if (!exist_runner) {
+			player.sendMessage(Text.literal("§c缺少逃生者！"));
+			return;
+		}
+		if (!exist_hunter) {
+			player.sendMessage(Text.literal("§c缺少追杀者！"));
+			return;
+		}
+
 		running = true;
 
 		// 获取发起者的位置、方向、世界
@@ -90,6 +118,7 @@ public class RunTimeControl {
 		// 传送所有玩家到发起者位置
 		for (ServerWorld serverWorld : player.getServer().getWorlds()) {
 			for (ServerPlayerEntity other : serverWorld.getPlayers()) {
+				other.removeStatusEffect(StatusEffects.GLOWING);
 				other.teleportTo(target);
 				LOGGER.info("Teleporting " + player.getName() + " to " + target);
 			}
@@ -117,10 +146,40 @@ public class RunTimeControl {
 			}
 		}
 
+
+		player.getServer().getCommandManager().executeWithPrefix(
+				player.getCommandSource(),
+				"title @a title {\"text\":\"游戏开始！\",\"color\":\"green\"}"
+		);
+		player.getServer().getCommandManager().executeWithPrefix(
+				player.getCommandSource(),
+				"title @a subtitle {\"text\":\"追杀者者将在 " + prepareTime + " 秒后开始追杀！\",\"color\":\"red\"}"
+		);
+
+
 //		give @a 指南针
 		LOGGER.info("Start init campasses");
 		CompassHandler.init();
 		LOGGER.info("Inited campasses");
+
+		if (prepareTime != 0) {
+			for (ServerWorld serverWorld : player.getServer().getWorlds()) {
+				for (ServerPlayerEntity targetPlayer : serverWorld.getPlayers()) {
+					if (Objects.requireNonNull(targetPlayer.getScoreboardTeam()).getName().equals("hunter")) {
+						player.addStatusEffect(new StatusEffectInstance(
+								StatusEffects.BLINDNESS, prepareTime * 20, 0, false, false, false
+						));
+						player.addStatusEffect(new StatusEffectInstance(
+								StatusEffects.SLOWNESS, prepareTime * 20, 255, false, false, false
+						));
+						player.addStatusEffect(new StatusEffectInstance(
+								StatusEffects.WEAKNESS, prepareTime * 20, 15, false, false, false
+						));
+					}
+				}
+			}
+
+		}
 	}
 
 	// 显示获胜信息

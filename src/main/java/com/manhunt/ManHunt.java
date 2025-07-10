@@ -14,6 +14,8 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.Team;
 import net.minecraft.server.MinecraftServer;
@@ -23,12 +25,15 @@ import net.minecraft.text.ClickEvent;
 import net.minecraft.text.HoverEvent;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.WorldSavePath;
 import net.minecraft.world.GameMode;
 import net.minecraft.world.GameRules;
 import org.apache.logging.log4j.core.jmx.Server;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 
@@ -53,12 +58,15 @@ public class ManHunt implements ModInitializer {
 //		ModScreens.register();
 
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+			if (!isNewWorld(server)) { return; }
 			for (ServerWorld world : server.getWorlds()) {
 				world.getGameRules().get(GameRules.SEND_COMMAND_FEEDBACK).set(false, server);
 			}
 		});
 
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+			// 如果是旧世界就什么都不执行
+			if (!isNewWorld(server)) { return; }
 			Scoreboard scoreboard = server.getScoreboard();
 			// 移除所有玩家的队伍归属
 			for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
@@ -105,9 +113,36 @@ public class ManHunt implements ModInitializer {
 
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, _server) -> {
 			ServerPlayerEntity player = handler.getPlayer();
-			sendRoleSelectionButtons(player);
-			LOGGER.info("Send messages to " + player.getName().getString());
-			player.changeGameMode(GameMode.SPECTATOR);
+			String team = player.getScoreboardTeam() != null ? player.getScoreboardTeam().getName() : "";
+
+			// 注入夜视效果（无粒子、无图标）
+			StatusEffectInstance nightVision = new StatusEffectInstance(
+					StatusEffects.NIGHT_VISION,
+					StatusEffectInstance.INFINITE,
+					0,
+					false,
+					false,
+					false
+			);
+			player.addStatusEffect(nightVision);
+
+			if (team.isEmpty()) {
+				sendRoleSelectionButtons(player);
+				LOGGER.info("Send messages to " + player.getName().getString());
+				player.changeGameMode(GameMode.SPECTATOR);
+				player.addStatusEffect(new StatusEffectInstance(
+						StatusEffects.GLOWING, StatusEffectInstance.INFINITE, 0, false, false, false
+				));
+			} else {
+				sendRoleSelectionButtons(player);
+				LOGGER.info("Send messages to " + player.getName().getString());
+				player.sendMessage(Text.literal("§a你已经加入了一个队伍！"));
+
+				if (running) {
+					player.removeStatusEffect(StatusEffects.GLOWING);
+				}
+//				player.changeGameMode(GameMode.SPECTATOR);
+			}
 		});
 	}
 
@@ -150,11 +185,39 @@ public class ManHunt implements ModInitializer {
 				.withBold(true)
 		));
 
+		player.sendMessage(Text.literal("§6逃脱者准备时间："));
+		// 逃脱者准备时间设置
+		player.sendMessage(Text.literal("§6[0秒]").styled(style -> style
+				.withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/manhunt setTime 0"))
+				.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Text.literal("大蛇不需要准备时间")))
+				.withBold(true)
+				).append(Text.literal("§6[10秒]").styled(style -> style
+						.withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/manhunt setTime 10"))
+						.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Text.literal("10秒准备时间")))
+						.withBold(true)
+				)).append(Text.literal("§6[15秒]").styled(style -> style
+						.withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/manhunt setTime 15"))
+						.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Text.literal("15秒准备时间")))
+						.withBold(true)
+				)).append(Text.literal("§6[20秒]").styled(style -> style
+						.withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/manhunt setTime 20"))
+						.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Text.literal("20秒准备时间")))
+						.withBold(true)
+				))
+		);
+
+		player.sendMessage(Text.literal("§7§m------------------------------"));
+
 		// 开始游戏
 		player.sendMessage(Text.literal("§e[开始游戏]").styled(style -> style
 				.withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/manhunt start"))
 				.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Text.literal("点击开始游戏")))
 				.withBold(true)
 		));
+	}
+
+	private static boolean isNewWorld(MinecraftServer server) {
+		Path levelDat = server.getSavePath(WorldSavePath.ROOT).resolve("level.dat_old");
+		return !Files.exists(levelDat);
 	}
 }
